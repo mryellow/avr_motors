@@ -1,5 +1,5 @@
 baud=19200
-src=ultrasonic
+src=motors
 avrType=atmega328p
 avrFreq=8000000UL # 8MHz for accurate baudrate timing
 #programmerDev=/dev/ttyUSB003 No usbserial device for USBTiny
