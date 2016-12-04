@@ -1,0 +1,6 @@
+*.hex
+*.lst
+*.o
+*.elf
+*.txt
+*.a
