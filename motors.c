@@ -137,6 +137,7 @@ void handle_I2C_interrupt(volatile uint8_t TWI_match_addr, uint8_t status){
         //I2C_buffer[(x*4)+3]
 
         // Direction
+        // FIXME: Inaccuracies in number? Look for greater than instead?
         switch (direction) {
           // foward
           case 255:
