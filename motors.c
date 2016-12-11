@@ -6,35 +6,61 @@
 //#include <stdio.h>
 #include "twi.h"
 
-#define BIT_NUM      8
-#define ENCODER_NUM  2
-#define ENCODER_PIN  PINC
-#define ENCODER_PORT PORTC
-#define ENCODER_DDR  DDRC
+#define BIT_NUM        8
+#define ENCODER_NUM    2
+#define ENCODER_PORT   PORTC
+#define ENCODER_DDR    DDRC
+#define ENCODER_PIN    PINC
+#define MOTOR_NUM      2
+#define MOTOR_PORT     PORTB
+#define MOTOR_DDR      DDRB
+#define MOTOR_PIN      PINB
+#define MOTOR_PIN_PWM_0  1
+#define MOTOR_PIN_IN1_0  0
+#define MOTOR_PIN_IN2_0  2
+#define MOTOR_PIN_PWM_1  3
+#define MOTOR_PIN_IN1_1  4
+#define MOTOR_PIN_IN2_1  5
+#define MOTOR_PIN_PWM(PIN) MOTOR_PIN_PWM_ ## PIN
+#define MOTOR_PIN_IN1(PIN) MOTOR_PIN_IN1_ ## PIN
+#define MOTOR_PIN_IN2(PIN) MOTOR_PIN_IN2_ ## PIN
+/*
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+
+#pragma message "MOTOR_PIN_PWM(0): " STR(MOTOR_PIN_PWM(0))
+#pragma message "MOTOR_PIN_PWM(1): " STR(MOTOR_PIN_PWM(1))
+#pragma message "MOTOR_PIN_IN1(0): " STR(MOTOR_PIN_IN1(0))
+#pragma message "MOTOR_PIN_IN1(1): " STR(MOTOR_PIN_IN1(1))
+#pragma message "MOTOR_PIN_IN2(0): " STR(MOTOR_PIN_IN2(0))
+#pragma message "MOTOR_PIN_IN2(1): " STR(MOTOR_PIN_IN2(1))
+*/
 
 uint8_t encoder_buffer[BIT_NUM];
 
-volatile uint8_t echoporthistory = 0xFF;
+volatile uint8_t porthistory = 0xFF;
 ISR(PCINT1_vect) {
   uint8_t changedbits;
-  changedbits = ENCODER_PIN ^ echoporthistory;
-  echoporthistory = ENCODER_PIN;
+  changedbits = ENCODER_PIN ^ porthistory;
+  porthistory = ENCODER_PIN;
 
   uint8_t x;
   for (x=0; x<ENCODER_NUM; x++) {
     if (changedbits & _BV(x)) {
-      uint8_t lo = (x == 0)?TCNT0L:TCNT2L;
-      uint8_t hi = (x == 0)?TCNT0H:TCNT2H;
+      uint16_t count = (x == 0)?TCNT0:TCNT2;
+      uint8_t count_lo = count & 0xFF;
+      uint8_t count_hi = count >> 8;
+
       // high
       if (ENCODER_PIN & _BV(x)) {
         // Time since last low
-        encoder_buffer[(x*4)]   = lo; // 0, 4
-        encoder_buffer[(x*4)+1] = hi; // 1, 5
+        encoder_buffer[(x*4)]   = count_lo; // 0, 4
+        encoder_buffer[(x*4)+1] = count_hi; // 1, 5
       // low
       } else {
         // Time since last high
-        encoder_buffer[(x*4)+2] = lo; // 2, 6
-        encoder_buffer[(x*4)+3] = hi; // 3, 7
+        encoder_buffer[(x*4)+2] = count_lo; // 2, 6
+        encoder_buffer[(x*4)+3] = count_hi; // 3, 7
       }
       // Reset timer if an encoder pin changes.
       if (x == 0) {
@@ -64,21 +90,23 @@ void sensor_setup(void) {
   PCICR |= _BV(PCIE1);
   PCMSK1 |= _BV(0) | _BV(1);
 
+  // Motor pin is output
+  MOTOR_DDR |= _BV(MOTOR_PIN_PWM(0)) | _BV(MOTOR_PIN_PWM(1));
+  MOTOR_DDR |= _BV(MOTOR_PIN_IN1(0)) | _BV(MOTOR_PIN_IN1(1));
+  MOTOR_DDR |= _BV(MOTOR_PIN_IN2(0)) | _BV(MOTOR_PIN_IN2(1));
+
   // Timer configuration
+
+  // Timer 1, PWM
+  TCCR1A = _BV(WGM10) | _BV(COM1A1); // PWM phase correct mode, inverted
 
   // Timer 0, encoder
   TCCR0A = _BV(WGM21); // CTC Mode
   TCCR0B = _BV(CS21); // Clock = ClkI/O / 8
-  // FIXME: Configure a time which makes sense.
-  OCR0A = 3906; // 1 Second
-  TIMSK0 |= _BV(OCIE0A); // Enable Interrupt TimerCounter2 Compare Match A
 
   // Timer 2, encoder
   TCCR2A = _BV(WGM21); // CTC Mode
   TCCR2B = _BV(CS21); // Clock = ClkI/O / 8
-  // FIXME: Configure a time which makes sense.
-  OCR2A = 3906; // 1 Second
-  TIMSK2 |= _BV(OCIE2A); // Enable Interrupt TimerCounter2 Compare Match A
 
 }
 
@@ -89,7 +117,6 @@ int main(void) {
             100000L,                    // desired TWI/IC2 bitrate
             I2C_buffer,                 // pointer to comm buffer
             sizeof(I2C_buffer),         // size of comm buffer
-            0
             &handle_I2C_interrupt       // pointer to callback function
             );
 
