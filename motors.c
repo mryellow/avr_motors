@@ -159,9 +159,9 @@ void handle_I2C_interrupt(volatile uint8_t TWI_match_addr, uint8_t status){
         // Adjust PWM duty-cycle.
         // FIXME: Inverted? 100% duty = slow or fast?
         if (x == 0) {
-          OCR1A = velocity*255;
+          OCR1A = velocity;
         } else {
-          OCR1B = velocity*255;
+          OCR1B = velocity;
         }
       }
 
