@@ -75,7 +75,7 @@ void sensor_setup(void) {
   PCMSK1 |= _BV(0) | _BV(1);
 
   // Motor pin is output
-  MOTOR_DDR |= _BV(motor_pin_pwm[0]) | _BV(motor_pin_pwm[1]);
+  MOTOR_DDR |= _BV(motor_pin_pwm[0]) | _BV(motor_pin_pwm[1]); // FIXME: Timer pins default?
   MOTOR_DDR |= _BV(motor_pin_in1[0]) | _BV(motor_pin_in1[1]);
   MOTOR_DDR |= _BV(motor_pin_in2[0]) | _BV(motor_pin_in2[1]);
   // Start at 0% duty cycle.
@@ -148,7 +148,7 @@ void handle_I2C_interrupt(volatile uint8_t TWI_match_addr, uint8_t status){
             MOTOR_PORT |= _BV(motor_pin_in2[x]);
             MOTOR_PORT &= ~_BV(motor_pin_in1[x]);
             break;
-          // break
+          // brake
           default:
             MOTOR_PORT |= _BV(motor_pin_in1[x]);
             MOTOR_PORT |= _BV(motor_pin_in2[x]);
@@ -158,8 +158,11 @@ void handle_I2C_interrupt(volatile uint8_t TWI_match_addr, uint8_t status){
         // Velocity
         // Adjust PWM duty-cycle.
         // FIXME: Inverted? 100% duty = slow or fast?
-        OCR1A = velocity*255;
-        OCR1B = velocity*255;
+        if (x == 0) {
+          OCR1A = velocity*255;
+        } else {
+          OCR1B = velocity*255;
+        }
       }
 
       // Set buffer to be returned on next read cycle
