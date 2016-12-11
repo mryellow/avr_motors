@@ -15,26 +15,10 @@
 #define MOTOR_PORT     PORTB
 #define MOTOR_DDR      DDRB
 #define MOTOR_PIN      PINB
-#define MOTOR_PIN_PWM_0  1
-#define MOTOR_PIN_IN1_0  0
-#define MOTOR_PIN_IN2_0  2
-#define MOTOR_PIN_PWM_1  3
-#define MOTOR_PIN_IN1_1  4
-#define MOTOR_PIN_IN2_1  5
-#define MOTOR_PIN_PWM(PIN) MOTOR_PIN_PWM_ ## PIN
-#define MOTOR_PIN_IN1(PIN) MOTOR_PIN_IN1_ ## PIN
-#define MOTOR_PIN_IN2(PIN) MOTOR_PIN_IN2_ ## PIN
-/*
-#define STR_HELPER(x) #x
-#define STR(x) STR_HELPER(x)
 
-#pragma message "MOTOR_PIN_PWM(0): " STR(MOTOR_PIN_PWM(0))
-#pragma message "MOTOR_PIN_PWM(1): " STR(MOTOR_PIN_PWM(1))
-#pragma message "MOTOR_PIN_IN1(0): " STR(MOTOR_PIN_IN1(0))
-#pragma message "MOTOR_PIN_IN1(1): " STR(MOTOR_PIN_IN1(1))
-#pragma message "MOTOR_PIN_IN2(0): " STR(MOTOR_PIN_IN2(0))
-#pragma message "MOTOR_PIN_IN2(1): " STR(MOTOR_PIN_IN2(1))
-*/
+volatile uint8_t motor_pin_pwm[MOTOR_NUM] = { 1, 3 };
+volatile uint8_t motor_pin_in1[MOTOR_NUM] = { 0, 4 };
+volatile uint8_t motor_pin_in2[MOTOR_NUM] = { 2, 5 };
 
 uint8_t encoder_buffer[BIT_NUM];
 
@@ -91,14 +75,19 @@ void sensor_setup(void) {
   PCMSK1 |= _BV(0) | _BV(1);
 
   // Motor pin is output
-  MOTOR_DDR |= _BV(MOTOR_PIN_PWM(0)) | _BV(MOTOR_PIN_PWM(1));
-  MOTOR_DDR |= _BV(MOTOR_PIN_IN1(0)) | _BV(MOTOR_PIN_IN1(1));
-  MOTOR_DDR |= _BV(MOTOR_PIN_IN2(0)) | _BV(MOTOR_PIN_IN2(1));
+  MOTOR_DDR |= _BV(motor_pin_pwm[0]) | _BV(motor_pin_pwm[1]);
+  MOTOR_DDR |= _BV(motor_pin_in1[0]) | _BV(motor_pin_in1[1]);
+  MOTOR_DDR |= _BV(motor_pin_in2[0]) | _BV(motor_pin_in2[1]);
+  // Start at 0% duty cycle.
+  // FIXME: Inverted? 100% duty = slow or fast?
+  OCR1A = 255;
+  OCR1B = 255;
 
   // Timer configuration
 
   // Timer 1, PWM
   TCCR1A = _BV(WGM10) | _BV(COM1A1); // PWM phase correct mode, inverted
+
 
   // Timer 0, encoder
   TCCR0A = _BV(WGM21); // CTC Mode
@@ -138,14 +127,43 @@ int main(void) {
 // Write then read.
 void handle_I2C_interrupt(volatile uint8_t TWI_match_addr, uint8_t status){
     if (TWI_match_addr == I2C_SLAVE_ADDRESS && status == TWI_success) {
-      // TODO: Send command to motors
 
-      // Direction
-      // Velocity
+      // Send command to motors
+      uint8_t x;
+      for (x=0; x<MOTOR_NUM; x++) {
+        uint8_t direction = I2C_buffer[(x*4)];
+        uint8_t velocity  = I2C_buffer[(x*4)+1];
+        //I2C_buffer[(x*4)+2]
+        //I2C_buffer[(x*4)+3]
+
+        // Direction
+        switch (direction) {
+          // foward
+          case 255:
+            MOTOR_PORT |= _BV(motor_pin_in1[x]);
+            MOTOR_PORT &= ~_BV(motor_pin_in2[x]);
+            break;
+          // reverse
+          case 126:
+            MOTOR_PORT |= _BV(motor_pin_in2[x]);
+            MOTOR_PORT &= ~_BV(motor_pin_in1[x]);
+            break;
+          // break
+          default:
+            MOTOR_PORT |= _BV(motor_pin_in1[x]);
+            MOTOR_PORT |= _BV(motor_pin_in2[x]);
+            break;
+        }
+
+        // Velocity
+        // Adjust PWM duty-cycle.
+        // FIXME: Inverted? 100% duty = slow or fast?
+        OCR1A = velocity*255;
+        OCR1B = velocity*255;
+      }
 
       // Set buffer to be returned on next read cycle
       // Copy in sensor state
-      uint8_t x;
       for (x=0; x<BIT_NUM; x++) {
         I2C_buffer[x] = encoder_buffer[x];
       }
