@@ -6,7 +6,7 @@
 //#include <stdio.h>
 #include "twi.h"
 
-#define BIT_NUM        8
+#define BIT_NUM        4
 #define ENCODER_NUM    2
 #define ENCODER_PORT   PORTC
 #define ENCODER_DDR    DDRC
@@ -32,19 +32,15 @@ ISR(PCINT1_vect) {
   for (x=0; x<ENCODER_NUM; x++) {
     if (changedbits & _BV(x)) {
       uint16_t count = (x == 0)?TCNT0:TCNT2;
-      uint8_t count_lo = count & 0xFF;
-      uint8_t count_hi = count >> 8;
 
       // high
       if (ENCODER_PIN & _BV(x)) {
         // Time since last low
-        encoder_buffer[(x*4)]   = count_lo; // 0, 4
-        encoder_buffer[(x*4)+1] = count_hi; // 1, 5
+        encoder_buffer[(x*2)]   = count; // 0, 2
       // low
       } else {
         // Time since last high
-        encoder_buffer[(x*4)+2] = count_lo; // 2, 6
-        encoder_buffer[(x*4)+3] = count_hi; // 3, 7
+        encoder_buffer[(x*2)+1] = count; // 1, 3
       }
       // Reset timer if an encoder pin changes.
       if (x == 0) {
@@ -131,10 +127,8 @@ void handle_I2C_interrupt(volatile uint8_t TWI_match_addr, uint8_t status){
       // Send command to motors
       uint8_t x;
       for (x=0; x<MOTOR_NUM; x++) {
-        uint8_t direction = I2C_buffer[(x*4)];
-        uint8_t velocity  = I2C_buffer[(x*4)+1];
-        //I2C_buffer[(x*4)+2]
-        //I2C_buffer[(x*4)+3]
+        uint8_t direction = I2C_buffer[(x*2)];
+        uint8_t velocity  = I2C_buffer[(x*2)+1];
 
         // Direction
         // FIXME: Inaccuracies in number? Look for greater than instead?
